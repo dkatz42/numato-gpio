@@ -128,10 +128,12 @@ class NumatoUsbGpio:
 
     @property
     def ver(self):
-        """Return the device's version number as an integer value."""
+        """Return the device's version number as a string value."""
         if not hasattr(self, "_ver"):
             with self._rw_lock:
-                self._ver = self._read_int("ver", 32)
+                self._query("ver")
+                self._ver = self._read_until_discard(self._eol)
+                self._read_until(">")
         return self._ver
 
     @property
@@ -160,9 +162,9 @@ class NumatoUsbGpio:
         """
         if not hasattr(self, "_ports"):
             self._query("gpio readall")
-            response = self._read_until(self._eol)
+            response = self._read_until_discard(self._eol)
             self._read_until(">")
-            hex_digits = len(response) - len(self._eol)
+            hex_digits = len(response)
             self._ports = hex_digits * 4
         return self._ports
 
@@ -447,7 +449,7 @@ class NumatoUsbGpio:
         string = self._read(len(expected.encode()))
         # Some devices respond with mixed uppercasing,
         # lowering the response should match expected
-        if string.lower() != expected:
+        if string.lower() != expected.lower():
             raise NumatoGpioError(string)
 
     def _read_int(self, query, bits):
@@ -474,6 +476,12 @@ class NumatoUsbGpio:
         response = ""
         while not response.endswith(end_str):
             response += self._read(1)
+        return response
+
+    def _read_until_discard(self, end_str):
+        response = self._read_until(end_str);
+        # discard the matched string
+        response = response[:len(response) - len(end_str)]
         return response
 
     def _read(self, num):
